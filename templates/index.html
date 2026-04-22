@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hormuz Vessel Tracker POC</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIINfQWoVgRxc3pN8tC3tARwQnHRw34pWVE="
+      crossorigin=""
+    >
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <aside class="panel">
+        <header>
+          <h1>Hormuz Vessel Tracker</h1>
+          <p id="summary">Loading vessels...</p>
+        </header>
+
+        <div class="controls">
+          <input id="search" type="search" placeholder="Search name or MMSI" autocomplete="off">
+          <select id="cargoFilter">
+            <option value="">All cargo types</option>
+          </select>
+          <select id="statusFilter">
+            <option value="">All navigation statuses</option>
+          </select>
+          <button id="refresh" type="button">Refresh</button>
+        </div>
+
+        <div class="meta">
+          <span id="provider"></span>
+          <span id="lastRefresh"></span>
+        </div>
+        <p id="warning" class="warning" hidden></p>
+
+        <ol id="vesselList" class="vessel-list"></ol>
+      </aside>
+
+      <section id="map" aria-label="Vessel map"></section>
+    </main>
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
