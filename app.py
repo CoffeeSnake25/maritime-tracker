@@ -6,28 +6,27 @@ from datetime import datetime, timezone
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, url_for
 
 
 app = Flask(__name__)
 
 # Broad proof-of-concept box: Persian Gulf, Strait of Hormuz, Gulf of Oman,
 # and nearby Arabian Sea approaches.
-# REGION_BBOX = {
-#     "min_lat": 20.0,
-#     "max_lat": 31.0,
-#     "min_lon": 47.0,
-#     "max_lon": 65.0,
-# }
-
-# East Asia box for testing
 REGION_BBOX = {
-    "min_lat": 0.0,
-    "max_lat": 45.0,
-    "min_lon": 115.0,
-    "max_lon": 150.0,
+    "min_lat": 20.0,
+    "max_lat": 31.0,
+    "min_lon": 47.0,
+    "max_lon": 65.0,
 }
 
+# East Asia box for testing
+# REGION_BBOX = {
+#     "min_lat": 0.0,
+#     "max_lat": 45.0,
+#     "min_lon": 115.0,
+#     "max_lon": 150.0,
+# }
 
 # Mediterranean box for testing
 # REGION_BBOX = {
@@ -56,6 +55,12 @@ FIELDS = [
     "last_seen",
     "source",
 ]
+
+PROVIDERS = {
+    "mock": "Demo mode (mock data)",
+    "aisstream": "Local AISStream live mode",
+    "live": "Generic live JSON mode",
+}
 
 AISSTREAM_URL = "wss://stream.aisstream.io/v0/stream"
 AISSTREAM_DEFAULT_MESSAGE_TYPES = [
@@ -213,6 +218,14 @@ def read_mock_records():
 
 def mock_provider():
     return [normalize(record, "mock") for record in read_mock_records()], None
+
+
+def requested_provider_name():
+    raw_provider = request.args.get("provider") or os.getenv("HORMUZ_AIS_PROVIDER", "mock")
+    provider_name = raw_provider.strip().lower()
+    if provider_name in PROVIDERS:
+        return provider_name, None
+    return "mock", f"Unknown provider '{raw_provider}'; using demo mock data."
 
 
 def live_json_provider():
@@ -472,31 +485,34 @@ def load_vessels(provider_name):
         return vessels, warning, "aisstream"
     if provider_name == "live":
         vessels, warning = live_json_provider()
-        if vessels:
-            return vessels, warning, "live"
-        mock_vessels, _ = mock_provider()
-        return mock_vessels, warning or "No live records returned; showing mock data.", "mock"
+        return vessels, warning, "live"
     vessels, warning = mock_provider()
     return vessels, warning, "mock"
 
 
 @app.get("/")
 def index():
-    return render_template("index.html")
+    requested_provider, _ = requested_provider_name()
+    app_config = {
+        "apiVesselsUrl": url_for("vessels", provider=requested_provider),
+    }
+    return render_template("index.html", app_config=app_config)
 
 
 @app.get("/api/vessels")
 def vessels():
-    requested_provider = request.args.get("provider") or os.getenv("HORMUZ_AIS_PROVIDER", "mock")
+    requested_provider, provider_warning = requested_provider_name()
     records, warning, active_provider = load_vessels(requested_provider)
     if active_provider != "aisstream":
         records = [record for record in records if in_region(record)]
+    warnings = [message for message in (provider_warning, warning) if message]
     return jsonify(
         {
             "bbox": REGION_BBOX,
             "provider": active_provider,
+            "provider_label": PROVIDERS[active_provider],
             "requested_provider": requested_provider,
-            "warning": warning,
+            "warning": " ".join(warnings) or None,
             "last_refresh": now_iso(),
             "count": len(records),
             "vessels": records,

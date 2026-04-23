@@ -37,7 +37,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Run
+## Demo Mode
 
 ```bash
 flask --app app run --debug
@@ -45,7 +45,44 @@ flask --app app run --debug
 
 Open `http://127.0.0.1:5000`.
 
-The default provider is the offline mock dataset in `data/mock_vessels.json`.
+The default behavior is demo mode. It uses the offline mock dataset in
+`data/mock_vessels.json`, so the app is stable for UI feedback and does not
+need AISStream credentials or network access.
+
+You can also make the default explicit:
+
+```bash
+export HORMUZ_AIS_PROVIDER=mock
+flask --app app run --debug
+```
+
+## Provider Selection
+
+The Flask backend is the source of truth for provider selection. It accepts:
+
+```text
+mock       Demo mode with local mock data
+aisstream  Local AISStream websocket mode
+live       Generic live JSON endpoint mode
+```
+
+Provider selection order:
+
+1. `?provider=...` query parameter
+2. `HORMUZ_AIS_PROVIDER`
+3. `mock`
+
+Examples:
+
+```text
+http://127.0.0.1:5000/?provider=mock
+http://127.0.0.1:5000/?provider=aisstream
+http://127.0.0.1:5000/api/vessels?provider=aisstream
+```
+
+Live providers do not fall back to mock data. If a live provider is missing
+configuration, unavailable, or has no in-region records yet, the API returns
+that provider with a warning so live-data bugs stay visible.
 
 ## AISStream Live Provider
 
@@ -61,6 +98,18 @@ export AISSTREAM_API_KEY="your_key_here"
 flask --app app run --debug --no-reload --port 5001
 ```
 
+Open `http://127.0.0.1:5001`.
+
+Alternatively, keep the environment default as mock and request live mode only
+for a browser session:
+
+```bash
+export AISSTREAM_API_KEY="your_key_here"
+flask --app app run --debug --no-reload --port 5001
+```
+
+Open `http://127.0.0.1:5001/?provider=aisstream`.
+
 The AISStream provider subscribes to this app's bounding box and position-capable messages by default:
 
 ```text
@@ -75,7 +124,9 @@ To experiment with extra AISStream message types:
 export AISSTREAM_MESSAGE_TYPES="PositionReport,StandardClassBPositionReport,ExtendedClassBPositionReport,ShipStaticData,StaticDataReport"
 ```
 
-If `AISSTREAM_API_KEY` is missing, the websocket is unavailable, or no live messages have arrived for the region yet, the app falls back to mock data and shows a warning.
+If `AISSTREAM_API_KEY` is missing, the websocket is unavailable, or no live
+messages have arrived for the region yet, the app shows a warning and returns
+the current AISStream live cache without substituting mock records.
 
 Debug endpoints:
 
@@ -116,7 +167,8 @@ or:
 }
 ```
 
-If the live provider is unavailable, returns no records, or is not configured, the app falls back to mock data and shows a warning in the UI.
+If the live provider is unavailable, returns no records, or is not configured,
+the app shows a warning and does not substitute mock records.
 
 ## Normalized Vessel Schema
 

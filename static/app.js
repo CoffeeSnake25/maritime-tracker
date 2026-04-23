@@ -24,6 +24,8 @@ basemaps[activeBasemap].on("tileerror", () => {
 const markers = new Map();
 let allVessels = [];
 let loading = false;
+const config = window.MARITIME_TRACKER_CONFIG || {};
+const apiVesselsUrl = config.apiVesselsUrl || "/api/vessels";
 
 const els = {
   search: document.querySelector("#search"),
@@ -141,12 +143,12 @@ async function loadVessels() {
   els.refresh.disabled = true;
   els.summary.textContent = "Loading vessels...";
   try {
-    const response = await fetch("/api/vessels");
+    const response = await fetch(apiVesselsUrl);
     const data = await response.json();
     allVessels = data.vessels;
     setOptions(els.cargo, allVessels, "cargo_type", "All cargo types");
     setOptions(els.status, allVessels, "nav_status", "All navigation statuses");
-    els.provider.textContent = `Provider: ${data.provider}`;
+    els.provider.textContent = data.provider_label || `Provider: ${data.provider}`;
     els.lastRefresh.textContent = `Last refresh: ${new Date(data.last_refresh).toLocaleString()}`;
     els.warning.hidden = !data.warning;
     els.warning.textContent = data.warning || "";
