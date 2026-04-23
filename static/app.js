@@ -37,6 +37,8 @@ const els = {
   provider: document.querySelector("#provider"),
   lastRefresh: document.querySelector("#lastRefresh"),
   warning: document.querySelector("#warning"),
+  coordsToggle: document.querySelector("#coordsToggle"),
+  cursorCoords: document.querySelector("#cursorCoords"),
 };
 
 function value(v) {
@@ -94,6 +96,24 @@ function filteredVessels() {
     const matchesStatus = !els.status.value || vessel.nav_status === els.status.value;
     return matchesSearch && matchesCargo && matchesStatus;
   });
+}
+
+function formatLatLng(latlng) {
+  return `Lat ${latlng.lat.toFixed(5)}, Lon ${latlng.lng.toFixed(5)}`;
+}
+
+function updateCursorCoords(latlng) {
+  if (!els.coordsToggle.checked) {
+    return;
+  }
+  els.cursorCoords.textContent = formatLatLng(latlng);
+}
+
+function setCursorCoordsVisibility() {
+  els.cursorCoords.hidden = !els.coordsToggle.checked;
+  if (els.coordsToggle.checked && !els.cursorCoords.textContent) {
+    els.cursorCoords.textContent = "Lat --, Lon --";
+  }
 }
 
 function render() {
@@ -167,6 +187,8 @@ els.search.addEventListener("input", render);
 els.cargo.addEventListener("change", render);
 els.status.addEventListener("change", render);
 els.refresh.addEventListener("click", loadVessels);
+els.coordsToggle.addEventListener("change", setCursorCoordsVisibility);
+map.on("mousemove", (event) => updateCursorCoords(event.latlng));
 
 loadVessels();
 setInterval(loadVessels, 10000);
