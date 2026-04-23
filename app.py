@@ -12,12 +12,13 @@ from flask import Flask, jsonify, render_template, request, url_for
 app = Flask(__name__)
 
 # Broad proof-of-concept maritime demo box for the current map region.
-REGION_BBOX = {
-    "min_lat": 20.0,
-    "max_lat": 31.0,
-    "min_lon": 47.0,
-    "max_lon": 65.0,
-}
+
+# REGION_BBOX = {
+#     "min_lat": 20.0,
+#     "max_lat": 31.0,
+#     "min_lon": 47.0,
+#     "max_lon": 65.0,
+# }
 
 # East Asia box for testing
 # REGION_BBOX = {
@@ -28,12 +29,12 @@ REGION_BBOX = {
 # }
 
 # Mediterranean box for testing
-# REGION_BBOX = {
-#     "min_lat": 30.0,
-#     "max_lat": 46.0,
-#     "min_lon": -6.0,
-#     "max_lon": 37.0,
-# }
+REGION_BBOX = {
+    "min_lat": 30.0,
+    "max_lat": 46.0,
+    "min_lon": -6.0,
+    "max_lon": 37.0,
+}
 
 
 FIELDS = [
@@ -86,7 +87,6 @@ AISSTREAM_STATUS = {
     "subscription": None,
 }
 AISSTREAM_SAMPLES = []
-AISSTREAM_DEBUG = os.getenv("AISSTREAM_DEBUG", "1") == "1"
 
 NAV_STATUS = {
     0: "Under way using engine",
@@ -104,11 +104,6 @@ NAV_STATUS = {
 
 def now_iso():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-
-def debug_ais(*parts):
-    if AISSTREAM_DEBUG:
-        print("AIS DEBUG:", *parts, flush=True)
 
 
 def aisstream_message_types():
@@ -260,12 +255,10 @@ def normalize_aisstream_message(envelope):
         metadata = {}
 
     if not isinstance(body, dict) or not body:
-        debug_ais("drop: missing body", message_type, envelope)
         return None
 
     mmsi = first_value(body, "UserID") or first_value(metadata, "MMSI")
     if not mmsi:
-        debug_ais("drop: missing MMSI", message_type, envelope)
         return None
 
     lat = as_float(first_value(body, "Latitude") or first_value(metadata, "Latitude", "latitude"))
@@ -340,6 +333,34 @@ def increment_aisstream_status(key):
         AISSTREAM_STATUS[key] += 1
 
 
+def aisstream_heartbeat_every():
+    try:
+        return int(os.getenv("AISSTREAM_HEARTBEAT_EVERY", "100"))
+    except ValueError:
+        return 100
+
+
+def print_aisstream_heartbeat():
+    interval = aisstream_heartbeat_every()
+    if interval <= 0:
+        return
+
+    with AISSTREAM_LOCK:
+        status = dict(AISSTREAM_STATUS)
+
+    if status["messages_received"] and status["messages_received"] % interval == 0:
+        print(
+            "AIS heartbeat:",
+            f"received={status['messages_received']}",
+            f"parsed={status['parsed_messages']}",
+            f"dropped={status['dropped_messages']}",
+            f"cached={status['cached_vessels']}",
+            f"in_region={status['cached_in_region']}",
+            f"last_type={status['last_message_type']}",
+            flush=True,
+        )
+
+
 def remember_aisstream_sample(envelope, partial):
     sample = {
         "received_at": now_iso(),
@@ -379,12 +400,9 @@ async def aisstream_loop(api_key):
 
     while True:
         try:
-            debug_ais("starting connect attempt")
             update_aisstream_status(connected=False, subscription=safe_subscription)
             async with websockets.connect(AISSTREAM_URL, ping_interval=20, ping_timeout=20) as websocket:
-                debug_ais("websocket connected")
                 await websocket.send(json.dumps(subscription))
-                debug_ais("subscription sent", safe_subscription)
                 AISSTREAM_WARNING = None
                 update_aisstream_status(
                     connected=True,
@@ -397,12 +415,10 @@ async def aisstream_loop(api_key):
                     envelope = json.loads(raw_message)
                     message_type = envelope.get("MessageType")
                     update_aisstream_status(last_message_at=now_iso(), last_message_type=message_type)
-                    debug_ais("message", message_type, raw_message[:300])
 
                     if "error" in envelope:
                         AISSTREAM_WARNING = f"AISStream error: {envelope['error']}"
                         update_aisstream_status(last_error=AISSTREAM_WARNING)
-                        debug_ais(AISSTREAM_WARNING)
                         continue
 
                     partial = normalize_aisstream_message(envelope)
@@ -410,22 +426,13 @@ async def aisstream_loop(api_key):
                     if partial:
                         merge_aisstream_vessel(partial)
                         increment_aisstream_status("parsed_messages")
-                        debug_ais(
-                            "cached",
-                            partial.get("mmsi"),
-                            partial.get("ship_name"),
-                            partial.get("lat"),
-                            partial.get("lon"),
-                            "in_region=",
-                            in_region(partial),
-                        )
                     else:
                         increment_aisstream_status("dropped_messages")
+                    print_aisstream_heartbeat()
         except websockets.exceptions.ConnectionClosed as exc:
             close_code = getattr(exc, "code", None)
             close_reason = getattr(exc, "reason", None)
             AISSTREAM_WARNING = f"AISStream closed the websocket. code={close_code} reason={close_reason or 'none'}"
-            debug_ais("connection closed", close_code, close_reason, repr(exc))
             update_aisstream_status(
                 connected=False,
                 last_error=AISSTREAM_WARNING,
@@ -434,7 +441,6 @@ async def aisstream_loop(api_key):
             )
             await asyncio.sleep(10)
         except Exception as exc:
-            debug_ais("exception", repr(exc))
             AISSTREAM_WARNING = f"AISStream connection unavailable: {exc}"
             update_aisstream_status(connected=False, last_error=AISSTREAM_WARNING)
             await asyncio.sleep(10)
