@@ -1,0 +1,46 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment variables / secrets
+.env
+.env.*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE / editor
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Build / dist
+build/
+dist/
+*.egg-info/
+
+# Flask / local dev
+instance/
+.webassets-cache/
+
+# Node (only if you ever add tooling)
+node_modules/
+
+# Coverage / testing
+.coverage
+htmlcov/
+
+# Temporary files
+*.swp
+*.swo
+*~
