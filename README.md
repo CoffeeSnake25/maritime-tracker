@@ -1,6 +1,11 @@
-# Hormuz Vessel Tracker POC
+# Maritime Vessel Tracker POC
 
-A lightweight proof-of-concept vessel-tracking web app for the Strait of Hormuz region. It uses Flask for a tiny backend, Leaflet for the map, no database, and a mock provider so it works offline.
+A lightweight proof-of-concept maritime vessel tracking web app. It uses Flask
+for a tiny provider-backed backend, Leaflet for the map, no database, and a
+mock provider so the UI can be reviewed offline. The current proof-of-concept
+map and mock dataset are focused on one regional shipping corridor, but the
+project structure is intended to support broader maritime tracking experiments
+without duplicating the app.
 
 ## What It Shows
 
@@ -12,7 +17,8 @@ A lightweight proof-of-concept vessel-tracking web app for the Strait of Hormuz 
 - Last refresh time
 - Graceful `Unknown` values for missing AIS fields
 - Backend normalization into one vessel schema
-- Bounding-box filtering for the Persian Gulf, Strait of Hormuz, Gulf of Oman, and nearby Arabian Sea waters
+- Bounding-box filtering for the current proof-of-concept map region
+- Provider selection for static mock demos, local AISStream development, and compatible JSON feeds
 
 ## Project Structure
 
@@ -52,7 +58,7 @@ need AISStream credentials or network access.
 You can also make the default explicit:
 
 ```bash
-export HORMUZ_AIS_PROVIDER=mock
+export MARITIME_AIS_PROVIDER=mock
 flask --app app run --debug
 ```
 
@@ -69,7 +75,7 @@ live       Generic live JSON endpoint mode
 Provider selection order:
 
 1. `?provider=...` query parameter
-2. `HORMUZ_AIS_PROVIDER`
+2. `MARITIME_AIS_PROVIDER`
 3. `mock`
 
 Examples:
@@ -93,7 +99,7 @@ Install dependencies, set your key, and run:
 ```bash
 source .venv/bin/activate
 pip install -r requirements.txt
-export HORMUZ_AIS_PROVIDER=aisstream
+export MARITIME_AIS_PROVIDER=aisstream
 export AISSTREAM_API_KEY="your_key_here"
 flask --app app run --debug --no-reload --port 5001
 ```
@@ -144,8 +150,8 @@ Truly open, free, live global AIS data is limited. Many common maritime APIs eit
 To try a compatible live/open JSON endpoint instead of AISStream:
 
 ```bash
-export HORMUZ_AIS_PROVIDER=live
-export HORMUZ_LIVE_AIS_URL="https://example.org/vessels.json"
+export MARITIME_AIS_PROVIDER=live
+export MARITIME_LIVE_AIS_URL="https://example.org/vessels.json"
 flask --app app run --debug
 ```
 
@@ -194,7 +200,8 @@ The backend filters vessels to this bounding box:
 }
 ```
 
-This is intentionally broad for a POC and covers the Persian Gulf, Strait of Hormuz, Gulf of Oman, and nearby Arabian Sea approaches.
+This is intentionally broad for the current POC map region. You can change the
+bounding box in `app.py` when experimenting with other maritime regions.
 
 ## Swapping In A Future Provider
 

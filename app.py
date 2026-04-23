@@ -11,8 +11,7 @@ from flask import Flask, jsonify, render_template, request, url_for
 
 app = Flask(__name__)
 
-# Broad proof-of-concept box: Persian Gulf, Strait of Hormuz, Gulf of Oman,
-# and nearby Arabian Sea approaches.
+# Broad proof-of-concept maritime demo box for the current map region.
 REGION_BBOX = {
     "min_lat": 20.0,
     "max_lat": 31.0,
@@ -221,7 +220,7 @@ def mock_provider():
 
 
 def requested_provider_name():
-    raw_provider = request.args.get("provider") or os.getenv("HORMUZ_AIS_PROVIDER", "mock")
+    raw_provider = request.args.get("provider") or os.getenv("MARITIME_AIS_PROVIDER", "mock")
     provider_name = raw_provider.strip().lower()
     if provider_name in PROVIDERS:
         return provider_name, None
@@ -229,12 +228,12 @@ def requested_provider_name():
 
 
 def live_json_provider():
-    url = os.getenv("HORMUZ_LIVE_AIS_URL")
+    url = os.getenv("MARITIME_LIVE_AIS_URL")
     if not url:
-        return [], "Set HORMUZ_LIVE_AIS_URL to use a compatible live/open AIS JSON endpoint."
+        return [], "Set MARITIME_LIVE_AIS_URL to use a compatible live/open AIS JSON endpoint."
 
     try:
-        req = Request(url, headers={"User-Agent": "hormuz-ship-mapping-poc/0.1"})
+        req = Request(url, headers={"User-Agent": "maritime-vessel-tracker-poc/0.1"})
         with urlopen(req, timeout=8) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except (OSError, URLError, json.JSONDecodeError) as exc:
