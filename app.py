@@ -508,7 +508,7 @@ def index():
 def vessels():
     requested_provider, provider_warning = requested_provider_name()
     records, warning, active_provider = load_vessels(requested_provider)
-    if active_provider != "aisstream":
+    if active_provider not in {"aisstream", "mock"}:
         records = [record for record in records if in_region(record)]
     warnings = [message for message in (provider_warning, warning) if message]
     return jsonify(

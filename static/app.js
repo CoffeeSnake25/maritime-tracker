@@ -116,6 +116,12 @@ function setCursorCoordsVisibility() {
   }
 }
 
+function clearCursorCoords() {
+  if (els.coordsToggle.checked) {
+    els.cursorCoords.textContent = "Lat --, Lon --";
+  }
+}
+
 function render() {
   const vessels = filteredVessels();
 
@@ -189,6 +195,7 @@ els.status.addEventListener("change", render);
 els.refresh.addEventListener("click", loadVessels);
 els.coordsToggle.addEventListener("change", setCursorCoordsVisibility);
 map.on("mousemove", (event) => updateCursorCoords(event.latlng));
+map.on("mouseout", clearCursorCoords);
 
 loadVessels();
 setInterval(loadVessels, 10000);
