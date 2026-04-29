@@ -48,10 +48,11 @@
             <span>Cursor coords</span>
           </label>
           <span id="cursorCoords" class="coordinate-readout" hidden></span>
-          <button type="button" class="map-tool-button map-tool-button-disabled" disabled aria-disabled="true">
-            Draw box
-            <span class="map-tool-tag">Soon</span>
-          </button>
+          <button id="drawBox" type="button" class="map-tool-button">Draw box</button>
+          <button id="applyBox" type="button" class="map-tool-button" hidden disabled>Apply area</button>
+          <button id="clearBox" type="button" class="map-tool-button map-tool-button-subtle" hidden disabled>Clear box</button>
+          <span id="boxSummary" class="bbox-readout" hidden></span>
+          <span id="drawHint" class="map-tool-hint" hidden>Drag on map to draw area</span>
         </div>
       </section>
     </main>
