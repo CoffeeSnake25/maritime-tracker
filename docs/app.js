@@ -98,7 +98,7 @@ function filteredVessels() {
 }
 
 function formatLatLng(latlng) {
-  return `Lat ${latlng.lat.toFixed(5)}, Lon ${latlng.lng.toFixed(5)}`;
+  return `Lat ${latlng.lat.toFixed(4)}, Lon ${latlng.lng.toFixed(4)}`;
 }
 
 function updateCursorCoords(latlng) {
