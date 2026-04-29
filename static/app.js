@@ -24,6 +24,12 @@ basemaps[activeBasemap].on("tileerror", () => {
 const markers = new Map();
 let allVessels = [];
 let loading = false;
+let drawModeActive = false;
+let boxFilterActive = false;
+let currentBox = null;
+let boxLayer = null;
+let drawStartLatLng = null;
+let isDrawingBox = false;
 const config = window.MARITIME_TRACKER_CONFIG || {};
 const apiVesselsUrl = config.apiVesselsUrl || "/api/vessels";
 
@@ -39,6 +45,11 @@ const els = {
   warning: document.querySelector("#warning"),
   coordsToggle: document.querySelector("#coordsToggle"),
   cursorCoords: document.querySelector("#cursorCoords"),
+  drawBox: document.querySelector("#drawBox"),
+  applyBox: document.querySelector("#applyBox"),
+  clearBox: document.querySelector("#clearBox"),
+  boxSummary: document.querySelector("#boxSummary"),
+  drawHint: document.querySelector("#drawHint"),
 };
 
 function value(v) {
@@ -87,7 +98,8 @@ function setOptions(select, vessels, key, allLabel) {
 
 function filteredVessels() {
   const query = els.search.value.trim().toLowerCase();
-  return allVessels.filter((vessel) => {
+  const vessels = boxFilterActive ? allVessels.filter((vessel) => isVesselInBox(vessel, currentBox)) : allVessels;
+  return vessels.filter((vessel) => {
     const matchesSearch =
       !query ||
       String(vessel.ship_name || "").toLowerCase().includes(query) ||
@@ -98,8 +110,165 @@ function filteredVessels() {
   });
 }
 
+function areaVesselCount() {
+  return currentBox ? allVessels.filter((vessel) => isVesselInBox(vessel, currentBox)).length : allVessels.length;
+}
+
 function formatLatLng(latlng) {
   return `Lat ${latlng.lat.toFixed(4)}, Lon ${latlng.lng.toFixed(4)}`;
+}
+
+function formatBox(box) {
+  return `${box.min_lat.toFixed(4)}-${box.max_lat.toFixed(4)} N, ${box.min_lon.toFixed(4)}-${box.max_lon.toFixed(4)} E`;
+}
+
+function boxFromLatLngs(a, b) {
+  return {
+    min_lat: Math.min(a.lat, b.lat),
+    max_lat: Math.max(a.lat, b.lat),
+    min_lon: Math.min(a.lng, b.lng),
+    max_lon: Math.max(a.lng, b.lng),
+  };
+}
+
+function boxBounds(box) {
+  return [
+    [box.min_lat, box.min_lon],
+    [box.max_lat, box.max_lon],
+  ];
+}
+
+function hasMeaningfulBox(a, b) {
+  return map.latLngToContainerPoint(a).distanceTo(map.latLngToContainerPoint(b)) >= 8;
+}
+
+function hasVesselCoords(vessel) {
+  return Number.isFinite(vessel.lat) && Number.isFinite(vessel.lon);
+}
+
+function isVesselInBox(vessel, box) {
+  if (!box || !hasVesselCoords(vessel)) {
+    return false;
+  }
+  return vessel.lat >= box.min_lat && vessel.lat <= box.max_lat && vessel.lon >= box.min_lon && vessel.lon <= box.max_lon;
+}
+
+function createBoxLayer(bounds) {
+  return L.rectangle(bounds, {
+    color: "#0c6b70",
+    fillColor: "#1d9a8a",
+    fillOpacity: 0.12,
+    opacity: 0.9,
+    weight: 2,
+    dashArray: "6 5",
+    interactive: false,
+  }).addTo(map);
+}
+
+function removeBoxLayer() {
+  if (boxLayer) {
+    boxLayer.remove();
+    boxLayer = null;
+  }
+}
+
+function updateBoxControls() {
+  const hasBox = Boolean(currentBox);
+  els.drawBox.classList.toggle("map-tool-button-active", drawModeActive);
+  els.drawBox.setAttribute("aria-pressed", String(drawModeActive));
+  els.applyBox.hidden = !hasBox;
+  els.applyBox.disabled = !hasBox;
+  els.clearBox.hidden = !hasBox;
+  els.clearBox.disabled = !hasBox;
+  els.boxSummary.hidden = !hasBox;
+  els.boxSummary.textContent = hasBox ? formatBox(currentBox) : "";
+  els.drawHint.hidden = !drawModeActive;
+}
+
+function setDrawMode(active) {
+  drawModeActive = active;
+  isDrawingBox = false;
+  drawStartLatLng = null;
+  map.getContainer().classList.toggle("map-drawing-box", active);
+  if (active) {
+    map.closePopup();
+    map.dragging.disable();
+  } else {
+    map.dragging.enable();
+  }
+  updateBoxControls();
+}
+
+function startBoxDrawing(event) {
+  if (!drawModeActive) {
+    return;
+  }
+  L.DomEvent.preventDefault(event.originalEvent);
+  map.closePopup();
+  removeBoxLayer();
+  currentBox = null;
+  boxFilterActive = false;
+  isDrawingBox = true;
+  drawStartLatLng = event.latlng;
+  boxLayer = createBoxLayer([drawStartLatLng, drawStartLatLng]);
+  updateBoxControls();
+  render();
+}
+
+function updateBoxDrawing(event) {
+  if (!drawModeActive || !isDrawingBox || !boxLayer) {
+    return;
+  }
+  boxLayer.setBounds([drawStartLatLng, event.latlng]);
+}
+
+function finishBoxDrawing(event) {
+  if (!drawModeActive || !isDrawingBox) {
+    return;
+  }
+  if (!hasMeaningfulBox(drawStartLatLng, event.latlng)) {
+    removeBoxLayer();
+    currentBox = null;
+    boxFilterActive = false;
+    setDrawMode(false);
+    render();
+    return;
+  }
+  currentBox = boxFromLatLngs(drawStartLatLng, event.latlng);
+  boxLayer.setBounds(boxBounds(currentBox));
+  boxFilterActive = false;
+  setDrawMode(false);
+  render();
+}
+
+function cancelBoxDrawing() {
+  if (!drawModeActive) {
+    return;
+  }
+  if (isDrawingBox) {
+    removeBoxLayer();
+    currentBox = null;
+    boxFilterActive = false;
+    render();
+  }
+  setDrawMode(false);
+}
+
+function clearBox() {
+  removeBoxLayer();
+  currentBox = null;
+  boxFilterActive = false;
+  setDrawMode(false);
+  render();
+}
+
+function applyBoxFilter() {
+  if (!currentBox) {
+    return;
+  }
+  boxFilterActive = true;
+  updateBoxControls();
+  render();
 }
 
 function updateCursorCoords(latlng) {
@@ -124,6 +293,7 @@ function clearCursorCoords() {
 
 function render() {
   const vessels = filteredVessels();
+  const total = boxFilterActive ? areaVesselCount() : allVessels.length;
 
   for (const marker of markers.values()) {
     marker.remove();
@@ -157,7 +327,9 @@ function render() {
     els.list.append(item);
   }
 
-  els.summary.textContent = `${vessels.length} of ${allVessels.length} vessels in region`;
+  els.summary.textContent = boxFilterActive
+    ? `${vessels.length} of ${total} vessels in selected area`
+    : `${vessels.length} of ${allVessels.length} vessels in region`;
   map.invalidateSize();
 }
 
@@ -194,9 +366,27 @@ els.cargo.addEventListener("change", render);
 els.status.addEventListener("change", render);
 els.refresh.addEventListener("click", loadVessels);
 els.coordsToggle.addEventListener("change", setCursorCoordsVisibility);
+els.drawBox.addEventListener("click", () => {
+  if (drawModeActive) {
+    cancelBoxDrawing();
+    return;
+  }
+  setDrawMode(true);
+});
+els.applyBox.addEventListener("click", applyBoxFilter);
+els.clearBox.addEventListener("click", clearBox);
 map.on("mousemove", (event) => updateCursorCoords(event.latlng));
 map.on("mouseout", clearCursorCoords);
+map.on("mousedown", startBoxDrawing);
+map.on("mousemove", updateBoxDrawing);
+map.on("mouseup", finishBoxDrawing);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    cancelBoxDrawing();
+  }
+});
 
+updateBoxControls();
 loadVessels();
 setInterval(loadVessels, 10000);
 

@@ -187,7 +187,9 @@ button {
 }
 
 .map-tool-button,
-.coordinate-readout {
+.coordinate-readout,
+.bbox-readout,
+.map-tool-hint {
   min-height: 36px;
   border-radius: 999px;
   font-size: 0.85rem;
@@ -206,6 +208,23 @@ button {
   cursor: pointer;
 }
 
+.map-tool-button:hover:not(:disabled),
+.map-tool-button-active {
+  color: #073f43;
+  border-color: rgba(12, 107, 112, 0.35);
+  background: #e7f4f2;
+}
+
+.map-tool-button:disabled {
+  color: var(--muted);
+  background: #f2f5f7;
+  cursor: default;
+}
+
+.map-tool-button-subtle {
+  background: #f7f9fb;
+}
+
 .map-tool-toggle input {
   width: 14px;
   min-width: 14px;
@@ -218,32 +237,43 @@ button {
   accent-color: var(--accent);
 }
 
-.map-tool-button-disabled {
-  color: var(--muted);
-  background: #f2f5f7;
-  border-style: dashed;
-  cursor: default;
-}
-
-.map-tool-tag {
+.map-tool-tag,
+.coordinate-readout,
+.bbox-readout,
+.map-tool-hint {
   display: inline-flex;
   align-items: center;
-  min-height: 22px;
   padding: 0 8px;
-  border-radius: 999px;
   color: var(--muted);
   background: #e8edf2;
   font-size: 0.77rem;
 }
 
 .coordinate-readout {
-  display: inline-flex;
-  align-items: center;
   padding: 0 14px;
-  color: var(--muted);
   background: rgba(255, 255, 255, 0.92);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.bbox-readout {
+  max-width: min(420px, calc(100vw - 48px));
+  padding: 0 12px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-tool-hint {
+  padding: 0 12px;
+  color: #073f43;
+  background: #dcefed;
+  white-space: nowrap;
+}
+
+.map-drawing-box {
+  cursor: crosshair;
 }
 
 /* Critical Leaflet layout rules kept locally so the map still clips correctly
@@ -377,7 +407,9 @@ button {
   }
 
   .map-tool-button,
-  .coordinate-readout {
+  .coordinate-readout,
+  .bbox-readout,
+  .map-tool-hint {
     min-height: 34px;
     font-size: 0.82rem;
   }
