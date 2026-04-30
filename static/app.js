@@ -24,6 +24,7 @@ basemaps[activeBasemap].on("tileerror", () => {
 const markers = new Map();
 let allVessels = [];
 let loading = false;
+let selectedMarkerKey = null;
 let drawModeActive = false;
 let boxFilterActive = false;
 let currentBox = null;
@@ -58,6 +59,10 @@ function value(v) {
 
 function label(vessel) {
   return value(vessel.ship_name) !== "Unknown" ? vessel.ship_name : `MMSI ${value(vessel.mmsi)}`;
+}
+
+function vesselKey(vessel) {
+  return vessel.mmsi || `${vessel.lat},${vessel.lon}`;
 }
 
 function popupHtml(vessel) {
@@ -114,6 +119,25 @@ function areaVesselCount() {
   return currentBox ? allVessels.filter((vessel) => isVesselInBox(vessel, currentBox)).length : allVessels.length;
 }
 
+function hasActiveListFilters() {
+  return Boolean(els.search.value.trim() || els.cargo.value || els.status.value);
+}
+
+function vesselWord(count) {
+  return count === 1 ? "vessel" : "vessels";
+}
+
+function countSummary(visibleCount, totalCount) {
+  if (boxFilterActive) {
+    return visibleCount === totalCount && !hasActiveListFilters()
+      ? `${visibleCount} ${vesselWord(visibleCount)} in selected area`
+      : `${visibleCount} of ${totalCount} vessels in selected area`;
+  }
+  return visibleCount === totalCount && !hasActiveListFilters()
+    ? `${visibleCount} ${vesselWord(visibleCount)} in region`
+    : `${visibleCount} of ${totalCount} vessels`;
+}
+
 function formatLatLng(latlng) {
   return `Lat ${latlng.lat.toFixed(4)}, Lon ${latlng.lng.toFixed(4)}`;
 }
@@ -155,12 +179,12 @@ function isVesselInBox(vessel, box) {
 
 function createBoxLayer(bounds) {
   return L.rectangle(bounds, {
-    color: "#0c6b70",
-    fillColor: "#1d9a8a",
-    fillOpacity: 0.12,
-    opacity: 0.9,
+    color: "#0b7b87",
+    fillColor: "#179bb0",
+    fillOpacity: 0.08,
+    opacity: 0.72,
     weight: 2,
-    dashArray: "6 5",
+    dashArray: "7 6",
     interactive: false,
   }).addTo(map);
 }
@@ -291,6 +315,27 @@ function clearCursorCoords() {
   }
 }
 
+function markerStyle(vessel, selected = false, dimmed = false) {
+  return {
+    radius: selected ? 9 : 7,
+    color: selected ? "#063f42" : "#0c6b70",
+    fillColor: vessel.nav_status === "At anchor" ? "#d89526" : "#1d9a8a",
+    fillOpacity: selected ? 0.96 : dimmed ? 0.5 : 0.85,
+    opacity: selected ? 1 : dimmed ? 0.58 : 1,
+    weight: selected ? 3 : 2,
+  };
+}
+
+function updateMarkerFocus() {
+  for (const [key, marker] of markers) {
+    const selected = key === selectedMarkerKey;
+    marker.setStyle(markerStyle(marker.vessel, selected, Boolean(selectedMarkerKey && !selected)));
+    if (selected) {
+      marker.bringToFront();
+    }
+  }
+}
+
 function render() {
   const vessels = filteredVessels();
   const total = boxFilterActive ? areaVesselCount() : allVessels.length;
@@ -302,15 +347,25 @@ function render() {
   els.list.innerHTML = "";
 
   for (const vessel of vessels) {
-    const marker = L.circleMarker([vessel.lat, vessel.lon], {
-      radius: 7,
-      color: "#0c6b70",
-      fillColor: vessel.nav_status === "At anchor" ? "#d89526" : "#1d9a8a",
-      fillOpacity: 0.85,
-      weight: 2,
-    }).addTo(map);
-    marker.bindPopup(popupHtml(vessel));
-    markers.set(vessel.mmsi || `${vessel.lat},${vessel.lon}`, marker);
+    const key = vesselKey(vessel);
+    const marker = L.circleMarker([vessel.lat, vessel.lon], markerStyle(vessel)).addTo(map);
+    marker.vessel = vessel;
+    marker.bindPopup(popupHtml(vessel), {
+      offset: L.point(0, -10),
+      autoPanPadding: L.point(18, 18),
+      maxWidth: 320,
+    });
+    marker.on("popupopen", () => {
+      selectedMarkerKey = key;
+      updateMarkerFocus();
+    });
+    marker.on("popupclose", () => {
+      if (selectedMarkerKey === key) {
+        selectedMarkerKey = null;
+        updateMarkerFocus();
+      }
+    });
+    markers.set(key, marker);
 
     const item = document.createElement("li");
     const button = document.createElement("button");
@@ -327,9 +382,12 @@ function render() {
     els.list.append(item);
   }
 
-  els.summary.textContent = boxFilterActive
-    ? `${vessels.length} of ${total} vessels in selected area`
-    : `${vessels.length} of ${allVessels.length} vessels in region`;
+  if (selectedMarkerKey && !markers.has(selectedMarkerKey)) {
+    selectedMarkerKey = null;
+  }
+  updateMarkerFocus();
+
+  els.summary.textContent = countSummary(vessels.length, total);
   map.invalidateSize();
 }
 
