@@ -172,13 +172,13 @@ button {
   z-index: 800;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
   justify-content: center;
   width: fit-content;
   max-width: calc(100% - 24px);
   transform: translateX(-50%);
-  padding: 8px;
+  padding: 6px;
   border: 1px solid rgba(23, 33, 43, 0.08);
   border-radius: 999px;
   background: rgba(247, 249, 251, 0.94);
@@ -186,11 +186,20 @@ button {
   backdrop-filter: blur(10px);
 }
 
+.map-tool-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.46);
+}
+
 .map-tool-button,
 .coordinate-readout,
 .bbox-readout,
 .map-tool-hint {
-  min-height: 36px;
+  min-height: 34px;
   border-radius: 999px;
   font-size: 0.85rem;
 }
@@ -223,6 +232,13 @@ button {
 
 .map-tool-button-subtle {
   background: #f7f9fb;
+}
+
+.map-tool-button-primary:not(:disabled) {
+  color: #063f42;
+  border-color: rgba(12, 107, 112, 0.42);
+  background: #dcefed;
+  font-weight: 650;
 }
 
 .map-tool-toggle input {
@@ -403,7 +419,13 @@ button {
   .map-action-bar {
     bottom: 12px;
     max-width: calc(100% - 16px);
-    padding: 6px;
+    padding: 5px;
+    border-radius: 14px;
+  }
+
+  .map-tool-group {
+    flex-wrap: wrap;
+    justify-content: center;
   }
 
   .map-tool-button,

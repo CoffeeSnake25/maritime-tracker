@@ -43,14 +43,18 @@
       <section class="map-area" aria-label="Vessel map area">
         <div id="map" aria-label="Vessel map"></div>
         <div class="map-action-bar" aria-label="Map tools">
-          <label class="map-tool-button map-tool-toggle">
-            <input id="coordsToggle" type="checkbox">
-            <span>Cursor coords</span>
-          </label>
-          <span id="cursorCoords" class="coordinate-readout" hidden></span>
-          <button id="drawBox" type="button" class="map-tool-button">Draw box</button>
-          <button id="applyBox" type="button" class="map-tool-button" hidden disabled>Apply area</button>
-          <button id="clearBox" type="button" class="map-tool-button map-tool-button-subtle" hidden disabled>Clear box</button>
+          <div class="map-tool-group">
+            <label class="map-tool-button map-tool-toggle">
+              <input id="coordsToggle" type="checkbox">
+              <span>Cursor coords</span>
+            </label>
+            <span id="cursorCoords" class="coordinate-readout" hidden></span>
+          </div>
+          <div class="map-tool-group">
+            <button id="drawBox" type="button" class="map-tool-button">Draw box</button>
+            <button id="applyBox" type="button" class="map-tool-button map-tool-button-primary" hidden disabled>Apply area</button>
+            <button id="clearBox" type="button" class="map-tool-button map-tool-button-subtle" hidden disabled>Clear box</button>
+          </div>
           <span id="boxSummary" class="bbox-readout" hidden></span>
           <span id="drawHint" class="map-tool-hint" hidden>Drag on map to draw area</span>
         </div>
