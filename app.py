@@ -8,6 +8,8 @@ from urllib.request import Request, urlopen
 
 from flask import Flask, jsonify, render_template, request, url_for
 
+from dark_vessel_matching import anomaly_candidates, detection_results, threshold_metadata
+
 
 app = Flask(__name__)
 
@@ -210,8 +212,18 @@ def read_mock_records():
         return json.load(file)
 
 
+def read_mock_satellite_detections():
+    with open("data/mock_satellite_detections.json", encoding="utf-8") as file:
+        return json.load(file)
+
+
 def mock_provider():
     return [normalize(record, "mock") for record in read_mock_records()], None
+
+
+def mock_detection_results():
+    vessels, _ = mock_provider()
+    return detection_results(read_mock_satellite_detections(), vessels)
 
 
 def requested_provider_name():
@@ -500,6 +512,8 @@ def index():
     requested_provider, _ = requested_provider_name()
     app_config = {
         "apiVesselsUrl": url_for("vessels", provider=requested_provider),
+        "apiDetectionResultsUrl": url_for("detection_result_records"),
+        "apiAnomaliesUrl": url_for("anomaly_records"),
     }
     return render_template("index.html", app_config=app_config)
 
@@ -521,6 +535,48 @@ def vessels():
             "last_refresh": now_iso(),
             "count": len(records),
             "vessels": records,
+        }
+    )
+
+
+@app.get("/api/satellite-detections")
+def satellite_detections():
+    detections = read_mock_satellite_detections()
+    return jsonify(
+        {
+            "thresholds": threshold_metadata(),
+            "last_refresh": now_iso(),
+            "count": len(detections),
+            "detections": detections,
+        }
+    )
+
+
+@app.get("/api/detection-results")
+def detection_result_records():
+    results = mock_detection_results()
+    anomalies = [result for result in results if result["is_anomaly_candidate"]]
+    return jsonify(
+        {
+            "thresholds": threshold_metadata(),
+            "last_refresh": now_iso(),
+            "count": len(results),
+            "anomaly_count": len(anomalies),
+            "results": results,
+        }
+    )
+
+
+@app.get("/api/anomalies")
+def anomaly_records():
+    vessels, _ = mock_provider()
+    anomalies = anomaly_candidates(read_mock_satellite_detections(), vessels)
+    return jsonify(
+        {
+            "thresholds": threshold_metadata(),
+            "last_refresh": now_iso(),
+            "count": len(anomalies),
+            "anomalies": anomalies,
         }
     )
 

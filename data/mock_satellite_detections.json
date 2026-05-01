@@ -1,0 +1,38 @@
+[
+  {
+    "detection_id": "SAT-001",
+    "lat": 26.5485,
+    "lon": 56.2847,
+    "detected_at": "2026-04-21T13:23:00Z",
+    "confidence": 0.91,
+    "source": "mock_satellite",
+    "notes": "Matched detection near GULF TRADER"
+  },
+  {
+    "detection_id": "SAT-002",
+    "lat": 26.548,
+    "lon": 56.33,
+    "detected_at": "2026-04-21T13:19:00Z",
+    "confidence": 0.86,
+    "source": "mock_satellite",
+    "notes": "Spatial miss near Strait of Hormuz traffic"
+  },
+  {
+    "detection_id": "SAT-003",
+    "lat": 25.2474,
+    "lon": 55.3122,
+    "detected_at": "2026-04-21T14:05:00Z",
+    "confidence": 0.88,
+    "source": "mock_satellite",
+    "notes": "Time-window miss near HORMUZ STAR"
+  },
+  {
+    "detection_id": "SAT-004",
+    "lat": 23.5,
+    "lon": 61.0,
+    "detected_at": "2026-04-21T13:20:00Z",
+    "confidence": 0.94,
+    "source": "mock_satellite",
+    "notes": "Clear anomaly with no nearby AIS vessel"
+  }
+]

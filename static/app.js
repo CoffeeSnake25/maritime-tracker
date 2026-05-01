@@ -22,7 +22,10 @@ basemaps[activeBasemap].on("tileerror", () => {
 });
 
 const markers = new Map();
+const satelliteLayer = L.layerGroup().addTo(map);
+const anomalyLayer = L.layerGroup().addTo(map);
 let allVessels = [];
+let detectionResults = [];
 let loading = false;
 let selectedMarkerKey = null;
 let drawModeActive = false;
@@ -33,6 +36,7 @@ let drawStartLatLng = null;
 let isDrawingBox = false;
 const config = window.MARITIME_TRACKER_CONFIG || {};
 const apiVesselsUrl = config.apiVesselsUrl || "/api/vessels";
+const apiDetectionResultsUrl = config.apiDetectionResultsUrl || "/api/detection-results";
 
 const els = {
   search: document.querySelector("#search"),
@@ -55,6 +59,10 @@ const els = {
 
 function value(v) {
   return v === null || v === undefined || v === "" ? "Unknown" : v;
+}
+
+function formatNumber(v, digits = 1) {
+  return Number.isFinite(v) ? v.toFixed(digits) : value(v);
 }
 
 function label(vessel) {
@@ -128,14 +136,18 @@ function vesselWord(count) {
 }
 
 function countSummary(visibleCount, totalCount) {
+  const anomalyCount = detectionResults.filter((result) => result.is_anomaly_candidate).length;
+  const anomalyText = detectionResults.length ? ` · ${anomalyCount} anomaly candidates` : "";
   if (boxFilterActive) {
-    return visibleCount === totalCount && !hasActiveListFilters()
+    const text = visibleCount === totalCount && !hasActiveListFilters()
       ? `${visibleCount} ${vesselWord(visibleCount)} in selected area`
       : `${visibleCount} of ${totalCount} vessels in selected area`;
+    return `${text}${anomalyText}`;
   }
-  return visibleCount === totalCount && !hasActiveListFilters()
+  const text = visibleCount === totalCount && !hasActiveListFilters()
     ? `${visibleCount} ${vesselWord(visibleCount)} in region`
     : `${visibleCount} of ${totalCount} vessels`;
+  return `${text}${anomalyText}`;
 }
 
 function formatLatLng(latlng) {
@@ -326,6 +338,58 @@ function markerStyle(vessel, selected = false, dimmed = false) {
   };
 }
 
+function detectionMarkerStyle(isAnomaly) {
+  return {
+    radius: isAnomaly ? 10 : 6,
+    color: isAnomaly ? "#7a1f1f" : "#473a8f",
+    fillColor: isAnomaly ? "#e24b3b" : "#7b68d8",
+    fillOpacity: isAnomaly ? 0.92 : 0.72,
+    opacity: 1,
+    weight: isAnomaly ? 3 : 2,
+    dashArray: isAnomaly ? null : "4 3",
+  };
+}
+
+function detectionPopupHtml(result) {
+  const detection = result.detection;
+  const rows = [
+    ["Detected at", detection.detected_at],
+    ["Position", Number.isFinite(detection.lat) && Number.isFinite(detection.lon) ? `${detection.lat.toFixed(4)}, ${detection.lon.toFixed(4)}` : null],
+    ["Confidence", Number.isFinite(detection.confidence) ? `${Math.round(detection.confidence * 100)}%` : null],
+    ["Nearest AIS", result.nearest_vessel ? label(result.nearest_vessel) : null],
+    ["Matched AIS", result.matched_vessel ? label(result.matched_vessel) : null],
+    ["Distance", result.distance_km !== null ? `${formatNumber(result.distance_km, 2)} km` : null],
+    ["Time delta", result.time_delta_minutes !== null ? `${formatNumber(result.time_delta_minutes, 1)} min` : null],
+    ["Thresholds", "2.0 km and +/-30 min"],
+  ];
+  return `
+    <h2 class="popup-title">${result.is_anomaly_candidate ? "Anomaly candidate" : "Satellite detection"} ${value(detection.detection_id)}</h2>
+    <p class="popup-reason">${value(result.reason)}</p>
+    <dl class="popup-grid">
+      ${rows.map(([key, val]) => `<dt>${key}</dt><dd>${value(val)}</dd>`).join("")}
+    </dl>
+  `;
+}
+
+function renderDetectionLayers() {
+  satelliteLayer.clearLayers();
+  anomalyLayer.clearLayers();
+  for (const result of detectionResults) {
+    const detection = result.detection;
+    if (!Number.isFinite(detection.lat) || !Number.isFinite(detection.lon)) {
+      continue;
+    }
+    const layer = result.is_anomaly_candidate ? anomalyLayer : satelliteLayer;
+    L.circleMarker([detection.lat, detection.lon], detectionMarkerStyle(result.is_anomaly_candidate))
+      .bindPopup(detectionPopupHtml(result), {
+        offset: L.point(0, -10),
+        autoPanPadding: L.point(18, 18),
+        maxWidth: 320,
+      })
+      .addTo(layer);
+  }
+}
+
 function updateMarkerFocus() {
   for (const [key, marker] of markers) {
     const selected = key === selectedMarkerKey;
@@ -386,6 +450,7 @@ function render() {
     selectedMarkerKey = null;
   }
   updateMarkerFocus();
+  renderDetectionLayers();
 
   els.summary.textContent = countSummary(vessels.length, total);
   map.invalidateSize();
@@ -401,7 +466,10 @@ async function loadVessels() {
   try {
     const response = await fetch(apiVesselsUrl);
     const data = await response.json();
+    const detectionResponse = await fetch(apiDetectionResultsUrl);
+    const detectionData = await detectionResponse.json();
     allVessels = data.vessels;
+    detectionResults = detectionData.results || [];
     setOptions(els.cargo, allVessels, "cargo_type", "All cargo types");
     setOptions(els.status, allVessels, "nav_status", "All navigation statuses");
     els.provider.textContent = data.provider_label || `Provider: ${data.provider}`;

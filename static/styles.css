@@ -373,6 +373,12 @@ button {
   font-weight: 700;
 }
 
+.popup-reason {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
 .popup-grid {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
