@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Maritime Vessel Tracker POC</title>
+    <title>Dark Vessel Anomaly POC</title>
     <link
       rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -16,9 +16,22 @@
     <main class="shell">
       <aside class="panel">
         <header>
-          <h1>Maritime Vessel Tracker</h1>
+          <h1>Dark Vessel Anomaly POC</h1>
           <p id="summary">Loading vessels...</p>
         </header>
+
+        <div class="view-mode-control" role="group" aria-label="Evidence view mode">
+          <button type="button" class="view-mode-button view-mode-button-active" data-view-mode="all">All Evidence</button>
+          <button type="button" class="view-mode-button" data-view-mode="ais">AIS Only</button>
+          <button type="button" class="view-mode-button" data-view-mode="satellite">Satellite Only</button>
+          <button type="button" class="view-mode-button" data-view-mode="anomalies">Anomalies Only</button>
+        </div>
+
+        <div class="legend" aria-label="Map legend">
+          <span><i class="legend-dot legend-ais"></i>AIS status</span>
+          <span><i class="legend-ring legend-satellite"></i>Satellite</span>
+          <span><i class="legend-ring legend-anomaly"></i>Anomaly</span>
+        </div>
 
         <div class="controls">
           <input id="search" type="search" placeholder="Search name or MMSI" autocomplete="off">
