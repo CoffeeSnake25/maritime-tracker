@@ -61,6 +61,77 @@ p {
   font-size: 0.9rem;
 }
 
+.view-mode-control {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #edf2f5;
+}
+
+.view-mode-button {
+  min-height: 34px;
+  padding: 0 8px;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.view-mode-button:hover,
+.view-mode-button-active {
+  color: #063f42;
+  background: white;
+  border-color: rgba(12, 107, 112, 0.28);
+  box-shadow: 0 1px 4px rgba(23, 33, 43, 0.08);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: white;
+}
+
+.legend-dot,
+.legend-ring {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.legend-ais {
+  background: #1d9a8a;
+  border: 1px solid #0c6b70;
+}
+
+.legend-satellite {
+  background: #fff8e6;
+  border: 2px dashed #b56b00;
+}
+
+.legend-anomaly {
+  background: #ffefe9;
+  border: 2px solid #8f1d2c;
+}
+
 .controls {
   display: grid;
   gap: 8px;

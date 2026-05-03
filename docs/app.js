@@ -26,6 +26,7 @@ const satelliteLayer = L.layerGroup().addTo(map);
 const anomalyLayer = L.layerGroup().addTo(map);
 let allVessels = [];
 let detectionResults = [];
+let viewMode = "all";
 let loading = false;
 let selectedMarkerKey = null;
 let drawModeActive = false;
@@ -54,6 +55,7 @@ const els = {
   clearBox: document.querySelector("#clearBox"),
   boxSummary: document.querySelector("#boxSummary"),
   drawHint: document.querySelector("#drawHint"),
+  viewModeButtons: document.querySelectorAll("[data-view-mode]"),
 };
 
 function value(v) {
@@ -122,31 +124,40 @@ function filteredVessels() {
   });
 }
 
-function areaVesselCount() {
-  return currentBox ? allVessels.filter((vessel) => isVesselInBox(vessel, currentBox)).length : allVessels.length;
+function modeShows(category) {
+  return viewMode === "all" || viewMode === category;
 }
 
-function hasActiveListFilters() {
-  return Boolean(els.search.value.trim() || els.cargo.value || els.status.value);
+function visibleVessels() {
+  return modeShows("ais") ? filteredVessels() : [];
 }
 
-function vesselWord(count) {
-  return count === 1 ? "vessel" : "vessels";
+function satelliteResults() {
+  return detectionResults.filter((result) => !result.is_anomaly_candidate);
 }
 
-function countSummary(visibleCount, totalCount) {
-  const anomalyCount = detectionResults.filter((result) => result.is_anomaly_candidate).length;
-  const anomalyText = detectionResults.length ? ` · ${anomalyCount} anomaly candidates` : "";
-  if (boxFilterActive) {
-    const text = visibleCount === totalCount && !hasActiveListFilters()
-      ? `${visibleCount} ${vesselWord(visibleCount)} in selected area`
-      : `${visibleCount} of ${totalCount} vessels in selected area`;
-    return `${text}${anomalyText}`;
-  }
-  const text = visibleCount === totalCount && !hasActiveListFilters()
-    ? `${visibleCount} ${vesselWord(visibleCount)} in region`
-    : `${visibleCount} of ${totalCount} vessels`;
-  return `${text}${anomalyText}`;
+function anomalyResults() {
+  return detectionResults.filter((result) => result.is_anomaly_candidate);
+}
+
+function filterResultsByBox(results) {
+  return boxFilterActive ? results.filter((result) => isPointInBox(result.detection, currentBox)) : results;
+}
+
+function visibleSatelliteResults() {
+  return modeShows("satellite") ? filterResultsByBox(satelliteResults()) : [];
+}
+
+function visibleAnomalyResults() {
+  return modeShows("anomalies") ? filterResultsByBox(anomalyResults()) : [];
+}
+
+function countSummary(visibleCounts) {
+  return [
+    `AIS: ${visibleCounts.ais} / ${allVessels.length} shown`,
+    `Satellite: ${visibleCounts.satellite} / ${satelliteResults().length} shown`,
+    `Anomalies: ${visibleCounts.anomalies} / ${anomalyResults().length} shown`,
+  ].join(" · ");
 }
 
 function formatLatLng(latlng) {
@@ -178,14 +189,22 @@ function hasMeaningfulBox(a, b) {
 }
 
 function hasVesselCoords(vessel) {
-  return Number.isFinite(vessel.lat) && Number.isFinite(vessel.lon);
+  return hasPointCoords(vessel);
+}
+
+function hasPointCoords(point) {
+  return Number.isFinite(point.lat) && Number.isFinite(point.lon);
+}
+
+function isPointInBox(point, box) {
+  if (!box || !hasPointCoords(point)) {
+    return false;
+  }
+  return point.lat >= box.min_lat && point.lat <= box.max_lat && point.lon >= box.min_lon && point.lon <= box.max_lon;
 }
 
 function isVesselInBox(vessel, box) {
-  if (!box || !hasVesselCoords(vessel)) {
-    return false;
-  }
-  return vessel.lat >= box.min_lat && vessel.lat <= box.max_lat && vessel.lon >= box.min_lon && vessel.lon <= box.max_lon;
+  return isPointInBox(vessel, box);
 }
 
 function createBoxLayer(bounds) {
@@ -328,24 +347,24 @@ function clearCursorCoords() {
 
 function markerStyle(vessel, selected = false, dimmed = false) {
   return {
-    radius: selected ? 9 : 7,
+    radius: selected ? 8 : 5,
     color: selected ? "#063f42" : "#0c6b70",
     fillColor: vessel.nav_status === "At anchor" ? "#d89526" : "#1d9a8a",
-    fillOpacity: selected ? 0.96 : dimmed ? 0.5 : 0.85,
-    opacity: selected ? 1 : dimmed ? 0.58 : 1,
-    weight: selected ? 3 : 2,
+    fillOpacity: selected ? 0.92 : dimmed ? 0.34 : 0.62,
+    opacity: selected ? 1 : dimmed ? 0.5 : 0.82,
+    weight: selected ? 3 : 1.5,
   };
 }
 
 function detectionMarkerStyle(isAnomaly) {
   return {
-    radius: isAnomaly ? 10 : 6,
-    color: isAnomaly ? "#7a1f1f" : "#473a8f",
-    fillColor: isAnomaly ? "#e24b3b" : "#7b68d8",
-    fillOpacity: isAnomaly ? 0.92 : 0.72,
+    radius: isAnomaly ? 8 : 6,
+    color: isAnomaly ? "#8f1d2c" : "#b56b00",
+    fillColor: isAnomaly ? "#ffefe9" : "#fff8e6",
+    fillOpacity: isAnomaly ? 0.38 : 0.12,
     opacity: 1,
     weight: isAnomaly ? 3 : 2,
-    dashArray: isAnomaly ? null : "4 3",
+    dashArray: isAnomaly ? null : "2 4",
   };
 }
 
@@ -373,19 +392,34 @@ function detectionPopupHtml(result) {
 function renderDetectionLayers() {
   satelliteLayer.clearLayers();
   anomalyLayer.clearLayers();
-  for (const result of detectionResults) {
+
+  for (const result of visibleSatelliteResults()) {
     const detection = result.detection;
     if (!Number.isFinite(detection.lat) || !Number.isFinite(detection.lon)) {
       continue;
     }
-    const layer = result.is_anomaly_candidate ? anomalyLayer : satelliteLayer;
-    L.circleMarker([detection.lat, detection.lon], detectionMarkerStyle(result.is_anomaly_candidate))
+    L.circleMarker([detection.lat, detection.lon], detectionMarkerStyle(false))
       .bindPopup(detectionPopupHtml(result), {
         offset: L.point(0, -10),
         autoPanPadding: L.point(18, 18),
         maxWidth: 320,
       })
-      .addTo(layer);
+      .addTo(satelliteLayer);
+  }
+
+  for (const result of visibleAnomalyResults()) {
+    const detection = result.detection;
+    if (!Number.isFinite(detection.lat) || !Number.isFinite(detection.lon)) {
+      continue;
+    }
+    L.circleMarker([detection.lat, detection.lon], detectionMarkerStyle(true))
+      .bindPopup(detectionPopupHtml(result), {
+        offset: L.point(0, -10),
+        autoPanPadding: L.point(18, 18),
+        maxWidth: 320,
+      })
+      .addTo(anomalyLayer)
+      .bringToFront();
   }
 }
 
@@ -400,8 +434,9 @@ function updateMarkerFocus() {
 }
 
 function render() {
-  const vessels = filteredVessels();
-  const total = boxFilterActive ? areaVesselCount() : allVessels.length;
+  const vessels = visibleVessels();
+  const visibleSatellites = visibleSatelliteResults();
+  const visibleAnomalies = visibleAnomalyResults();
 
   for (const marker of markers.values()) {
     marker.remove();
@@ -450,9 +485,22 @@ function render() {
   }
   updateMarkerFocus();
   renderDetectionLayers();
+  updateViewModeControls();
 
-  els.summary.textContent = countSummary(vessels.length, total);
+  els.summary.textContent = countSummary({
+    ais: vessels.length,
+    satellite: visibleSatellites.length,
+    anomalies: visibleAnomalies.length,
+  });
   map.invalidateSize();
+}
+
+function updateViewModeControls() {
+  for (const button of els.viewModeButtons) {
+    const active = button.dataset.viewMode === viewMode;
+    button.classList.toggle("view-mode-button-active", active);
+    button.setAttribute("aria-pressed", String(active));
+  }
 }
 
 async function loadVessels() {
@@ -500,6 +548,12 @@ els.drawBox.addEventListener("click", () => {
 });
 els.applyBox.addEventListener("click", applyBoxFilter);
 els.clearBox.addEventListener("click", clearBox);
+for (const button of els.viewModeButtons) {
+  button.addEventListener("click", () => {
+    viewMode = button.dataset.viewMode;
+    render();
+  });
+}
 map.on("mousemove", (event) => updateCursorCoords(event.latlng));
 map.on("mouseout", clearCursorCoords);
 map.on("mousedown", startBoxDrawing);
