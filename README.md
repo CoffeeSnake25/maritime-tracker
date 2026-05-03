@@ -13,6 +13,9 @@ when no AIS vessel is within both `2.0 km` and `+/-30 minutes`.
 - Interactive Leaflet map with vessel markers
 - Mock satellite detection markers
 - Highlighted anomaly candidate markers
+- Evidence view modes for all data, AIS only, satellite only, or anomalies only
+- Visible/total counts for AIS, satellite detections, and anomalies
+- Compact marker legend
 - Clickable vessel detail popups
 - Explanatory anomaly popups with distance and time-window details
 - Side-panel vessel list
@@ -208,14 +211,16 @@ Manual Flask verification:
 1. Run `flask --app app run --debug`.
 2. Open `http://127.0.0.1:5000`.
 3. Confirm AIS vessel markers, satellite detection markers, and anomaly markers render.
-4. Confirm popups explain the `2.0 km` and `+/-30 minutes` rule result.
-5. Confirm search, cargo/status filters, refresh, cursor coordinates, and bounding-box controls still work.
+4. Confirm `All Evidence`, `AIS Only`, `Satellite Only`, and `Anomalies Only` show the expected layers.
+5. Confirm AIS, satellite, and anomaly counts update when view modes or bounding-box filters change.
+6. Confirm popups explain the `2.0 km` and `+/-30 minutes` rule result.
+7. Confirm search, cargo/status filters, refresh, cursor coordinates, and bounding-box controls still work.
 
 Manual static docs verification:
 
-1. Open `docs/index.html` directly or through GitHub Pages.
+1. Run `python3 -m http.server 8000 -d docs` or open the GitHub Pages demo.
 2. Confirm it loads `docs/mock_vessels.json` and `docs/mock_detection_results.json`.
-3. Confirm AIS, satellite detection, and anomaly markers render without Flask.
+3. Confirm AIS, satellite detection, anomaly markers, view modes, counts, and legend render without Flask.
 
 ## AISStream Live Provider
 
