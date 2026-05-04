@@ -22,11 +22,13 @@ basemaps[activeBasemap].on("tileerror", () => {
 });
 
 const markers = new Map();
+const evidenceMarkers = new Map();
 const satelliteLayer = L.layerGroup().addTo(map);
 const anomalyLayer = L.layerGroup().addTo(map);
 let allVessels = [];
 let detectionResults = [];
 let viewMode = "all";
+let selectedEvidence = null;
 let loading = false;
 let selectedMarkerKey = null;
 let drawModeActive = false;
@@ -39,6 +41,7 @@ const mockVesselsUrl = "./mock_vessels.json";
 const mockDetectionResultsUrl = "./mock_detection_results.json";
 
 const els = {
+  shell: document.querySelector(".shell"),
   search: document.querySelector("#search"),
   cargo: document.querySelector("#cargoFilter"),
   status: document.querySelector("#statusFilter"),
@@ -56,7 +59,28 @@ const els = {
   boxSummary: document.querySelector("#boxSummary"),
   drawHint: document.querySelector("#drawHint"),
   viewModeButtons: document.querySelectorAll("[data-view-mode]"),
+  evidencePanel: document.querySelector("#evidencePanelContent"),
+  leftSidebarToggle: document.querySelector("#leftSidebarToggle"),
+  rightSidebarToggle: document.querySelector("#rightSidebarToggle"),
 };
+
+function syncSidebarToggle(side, collapsed) {
+  const isLeft = side === "left";
+  const button = isLeft ? els.leftSidebarToggle : els.rightSidebarToggle;
+  if (!button) {
+    return;
+  }
+  button.textContent = collapsed ? (isLeft ? "›" : "‹") : isLeft ? "‹" : "›";
+  button.setAttribute("aria-expanded", String(!collapsed));
+  button.setAttribute("aria-label", `${collapsed ? "Expand" : "Collapse"} ${isLeft ? "controls" : "evidence"} panel`);
+}
+
+function setSidebarCollapsed(side, collapsed) {
+  const className = `${side}-sidebar-collapsed`;
+  els.shell.classList.toggle(className, collapsed);
+  syncSidebarToggle(side, collapsed);
+  setTimeout(() => map.invalidateSize(), 210);
+}
 
 function value(v) {
   return v === null || v === undefined || v === "" ? "Unknown" : v;
@@ -74,26 +98,91 @@ function vesselKey(vessel) {
   return vessel.mmsi || `${vessel.lat},${vessel.lon}`;
 }
 
+function detectionId(result) {
+  return result.detection && result.detection.detection_id;
+}
+
+function evidenceId(type, record) {
+  return type === "ais" ? record.mmsi || vesselKey(record) : detectionId(record);
+}
+
+function evidenceMarkerKey(type, id) {
+  return `${type}:${id}`;
+}
+
+function selectEvidence(type, record) {
+  selectedEvidence = {
+    type,
+    id: evidenceId(type, record),
+    record,
+  };
+  if (type === "ais") {
+    selectedMarkerKey = vesselKey(record);
+    updateMarkerFocus();
+  }
+  renderEvidencePanel();
+}
+
+function evidencePoint(evidence) {
+  if (!evidence) {
+    return null;
+  }
+  return evidence.type === "ais" ? evidence.record : evidence.record.detection;
+}
+
+function evidenceRow(labelText, rawValue) {
+  if (rawValue === null || rawValue === undefined || rawValue === "") {
+    return "";
+  }
+  return `<div class="evidence-row"><dt>${labelText}</dt><dd>${rawValue}</dd></div>`;
+}
+
+function evidenceSection(title, rows) {
+  const content = rows.filter(Boolean).join("");
+  if (!content) {
+    return "";
+  }
+  return `<section class="evidence-section"><h4>${title}</h4><dl>${content}</dl></section>`;
+}
+
+function evidenceBadge(text, tone = "neutral") {
+  return `<span class="evidence-badge evidence-badge-${tone}">${text}</span>`;
+}
+
+function ruleBlock(text) {
+  return `<div class="evidence-rule"><strong>Rule</strong><span>${text}</span></div>`;
+}
+
+function emptyEvidencePanel() {
+  return `<p class="evidence-empty">Select an AIS vessel, satellite detection, or anomaly candidate to inspect evidence.</p>`;
+}
+
+function formatCoords(point) {
+  return hasPointCoords(point) ? `${point.lat.toFixed(4)}, ${point.lon.toFixed(4)}` : null;
+}
+
+function formatConfidence(value) {
+  return Number.isFinite(value) ? `${Math.round(value * 100)}%` : null;
+}
+
+function vesselEvidenceLabel(vessel) {
+  return vessel ? label(vessel) : null;
+}
+
+function detectionRuleText(result) {
+  return result.is_anomaly_candidate
+    ? "No AIS vessel matched within 2.0 km and +/-30 minutes."
+    : "AIS match found within 2.0 km and +/-30 minutes.";
+}
+
 function popupHtml(vessel) {
-  const rows = [
-    ["MMSI", vessel.mmsi],
-    ["Call sign", vessel.call_sign],
-    ["IMO", vessel.imo],
-    ["Position", vessel.lat !== null && vessel.lon !== null ? `${vessel.lat.toFixed(4)}, ${vessel.lon.toFixed(4)}` : null],
-    ["SOG", vessel.sog !== null ? `${vessel.sog} kn` : null],
-    ["COG", vessel.cog !== null ? `${vessel.cog} deg` : null],
-    ["Heading", vessel.heading !== null ? `${vessel.heading} deg` : null],
-    ["Status", vessel.nav_status],
-    ["Destination", vessel.destination],
-    ["ETA", vessel.eta],
-    ["Draft", vessel.draft !== null ? `${vessel.draft} m` : null],
-    ["Cargo", vessel.cargo_type],
-  ];
   return `
-    <h2 class="popup-title">${label(vessel)}</h2>
-    <dl class="popup-grid">
-      ${rows.map(([key, val]) => `<dt>${key}</dt><dd>${value(val)}</dd>`).join("")}
-    </dl>
+    <div class="popup-card">
+      <p class="popup-kicker">AIS Vessel</p>
+      <h2 class="popup-title">${label(vessel)}</h2>
+      <p class="popup-status">${value(vessel.nav_status) !== "Unknown" ? vessel.nav_status : "Navigation status unknown"}</p>
+      <p class="popup-note">Details shown in Evidence Panel.</p>
+    </div>
   `;
 }
 
@@ -370,41 +459,199 @@ function detectionMarkerStyle(isAnomaly) {
 
 function detectionPopupHtml(result) {
   const detection = result.detection;
-  const rows = [
-    ["Detected at", detection.detected_at],
-    ["Position", Number.isFinite(detection.lat) && Number.isFinite(detection.lon) ? `${detection.lat.toFixed(4)}, ${detection.lon.toFixed(4)}` : null],
-    ["Confidence", Number.isFinite(detection.confidence) ? `${Math.round(detection.confidence * 100)}%` : null],
-    ["Nearest AIS", result.nearest_vessel ? label(result.nearest_vessel) : null],
-    ["Matched AIS", result.matched_vessel ? label(result.matched_vessel) : null],
-    ["Distance", result.distance_km !== null ? `${formatNumber(result.distance_km, 2)} km` : null],
-    ["Time delta", result.time_delta_minutes !== null ? `${formatNumber(result.time_delta_minutes, 1)} min` : null],
-    ["Thresholds", "2.0 km and +/-30 min"],
-  ];
+  if (result.is_anomaly_candidate) {
+    return `
+      <div class="popup-card">
+        <p class="popup-kicker">Potential Dark Vessel Candidate</p>
+        <h2 class="popup-title">${value(detection.detection_id)}</h2>
+        <p class="popup-status">No AIS match within 2.0 km / ±30 min.</p>
+        <p class="popup-note">Details shown in Evidence Panel.</p>
+      </div>
+    `;
+  }
+
   return `
-    <h2 class="popup-title">${result.is_anomaly_candidate ? "Anomaly candidate" : "Satellite detection"} ${value(detection.detection_id)}</h2>
-    <p class="popup-reason">${value(result.reason)}</p>
-    <dl class="popup-grid">
-      ${rows.map(([key, val]) => `<dt>${key}</dt><dd>${value(val)}</dd>`).join("")}
-    </dl>
+    <div class="popup-card">
+      <p class="popup-kicker">Satellite Detection</p>
+      <h2 class="popup-title">${value(detection.detection_id)}</h2>
+      <p class="popup-status">${result.matched_vessel ? "Matched AIS vessel within threshold." : "Review match details."}</p>
+      <p class="popup-note">Details shown in Evidence Panel.</p>
+    </div>
   `;
+}
+
+function selectedEvidenceVisible() {
+  if (!selectedEvidence) {
+    return false;
+  }
+  if (selectedEvidence.type === "ais") {
+    return visibleVessels().some((vessel) => evidenceId("ais", vessel) === selectedEvidence.id);
+  }
+  if (selectedEvidence.type === "satellite") {
+    return visibleSatelliteResults().some((result) => detectionId(result) === selectedEvidence.id);
+  }
+  return visibleAnomalyResults().some((result) => detectionId(result) === selectedEvidence.id);
+}
+
+function hiddenEvidenceNotice() {
+  if (!selectedEvidence || selectedEvidenceVisible()) {
+    return "";
+  }
+  return `
+    <div class="evidence-hidden-note">
+      <span>This selected item is hidden by the current view or area filter.</span>
+      <button id="showSelectedEvidence" type="button">Show on map</button>
+    </div>
+  `;
+}
+
+function renderAisEvidence(vessel) {
+  return `
+    <div class="evidence-heading">
+      ${evidenceBadge("AIS Vessel")}
+      <h3>${label(vessel)}</h3>
+    </div>
+    ${hiddenEvidenceNotice()}
+    ${evidenceSection("Vessel", [
+      evidenceRow("MMSI", vessel.mmsi),
+      evidenceRow("Last seen", vessel.last_seen),
+      evidenceRow("Coordinates", formatCoords(vessel)),
+      evidenceRow("Navigation", vessel.nav_status),
+      evidenceRow("SOG", Number.isFinite(vessel.sog) ? `${vessel.sog} kn` : null),
+      evidenceRow("COG", Number.isFinite(vessel.cog) ? `${vessel.cog} deg` : null),
+      evidenceRow("Heading", Number.isFinite(vessel.heading) ? `${vessel.heading} deg` : null),
+      evidenceRow("Cargo", vessel.cargo_type),
+      evidenceRow("Destination", vessel.destination),
+      evidenceRow("Source", vessel.source),
+    ])}
+  `;
+}
+
+function resultMetricRows(result) {
+  return [
+    evidenceRow("Matched AIS", vesselEvidenceLabel(result.matched_vessel)),
+    evidenceRow("Nearest AIS", vesselEvidenceLabel(result.nearest_vessel)),
+    evidenceRow("Distance", result.distance_km !== null ? `${formatNumber(result.distance_km, 2)} km` : null),
+    evidenceRow("Time delta", result.time_delta_minutes !== null ? `${formatNumber(result.time_delta_minutes, 1)} min` : null),
+    evidenceRow("Reason", result.reason),
+  ];
+}
+
+function renderSatelliteEvidence(result) {
+  const detection = result.detection;
+  return `
+    <div class="evidence-heading">
+      ${evidenceBadge("Satellite Detection")}
+      <h3>${value(detection.detection_id)}</h3>
+    </div>
+    ${hiddenEvidenceNotice()}
+    ${ruleBlock(detectionRuleText(result))}
+    ${evidenceSection("Detection", [
+      evidenceRow("Detection ID", detection.detection_id),
+      evidenceRow("Timestamp", detection.detected_at),
+      evidenceRow("Coordinates", formatCoords(detection)),
+      evidenceRow("Confidence", formatConfidence(detection.confidence)),
+      evidenceRow("Match status", result.matched_vessel ? "Matched AIS vessel" : "No AIS match"),
+    ])}
+    ${evidenceSection("Match Evidence", resultMetricRows(result))}
+  `;
+}
+
+function renderAnomalyEvidence(result) {
+  const detection = result.detection;
+  return `
+    <div class="evidence-heading">
+      ${evidenceBadge("Rule-based anomaly candidate", "danger")}
+      <h3>Potential Dark Vessel Candidate</h3>
+    </div>
+    ${hiddenEvidenceNotice()}
+    ${ruleBlock("No AIS vessel matched within 2.0 km and +/-30 minutes.")}
+    <p class="evidence-caution">This is an indicator for review, not a confirmed dark vessel.</p>
+    ${evidenceSection("Detection", [
+      evidenceRow("Detection ID", detection.detection_id),
+      evidenceRow("Timestamp", detection.detected_at),
+      evidenceRow("Coordinates", formatCoords(detection)),
+      evidenceRow("Confidence", formatConfidence(detection.confidence)),
+    ])}
+    ${evidenceSection("Anomaly Evidence", resultMetricRows(result))}
+  `;
+}
+
+function renderEvidencePanel() {
+  if (!els.evidencePanel) {
+    return;
+  }
+  if (!selectedEvidence) {
+    els.evidencePanel.innerHTML = emptyEvidencePanel();
+    return;
+  }
+  if (selectedEvidence.type === "ais") {
+    els.evidencePanel.innerHTML = renderAisEvidence(selectedEvidence.record);
+    return;
+  }
+  if (selectedEvidence.type === "satellite") {
+    els.evidencePanel.innerHTML = renderSatelliteEvidence(selectedEvidence.record);
+    return;
+  }
+  els.evidencePanel.innerHTML = renderAnomalyEvidence(selectedEvidence.record);
+}
+
+function resolveSelectedEvidence() {
+  if (!selectedEvidence) {
+    return;
+  }
+  if (selectedEvidence.type === "ais") {
+    const vessel = allVessels.find((item) => evidenceId("ais", item) === selectedEvidence.id);
+    selectedEvidence = vessel ? { ...selectedEvidence, record: vessel } : null;
+    return;
+  }
+  const result = detectionResults.find((item) => detectionId(item) === selectedEvidence.id);
+  selectedEvidence = result ? { ...selectedEvidence, record: result } : null;
+}
+
+function showSelectedEvidenceOnMap() {
+  if (!selectedEvidence) {
+    return;
+  }
+  const point = evidencePoint(selectedEvidence);
+  viewMode = "all";
+  if (boxFilterActive && point && !isPointInBox(point, currentBox)) {
+    clearBox();
+  } else {
+    render();
+  }
+  if (!hasPointCoords(point)) {
+    return;
+  }
+  map.setView([point.lat, point.lon], Math.max(map.getZoom(), 8));
+  const marker =
+    selectedEvidence.type === "ais"
+      ? markers.get(selectedEvidence.id)
+      : evidenceMarkers.get(evidenceMarkerKey(selectedEvidence.type, selectedEvidence.id));
+  if (marker) {
+    marker.openPopup();
+  }
 }
 
 function renderDetectionLayers() {
   satelliteLayer.clearLayers();
   anomalyLayer.clearLayers();
+  evidenceMarkers.clear();
 
   for (const result of visibleSatelliteResults()) {
     const detection = result.detection;
     if (!Number.isFinite(detection.lat) || !Number.isFinite(detection.lon)) {
       continue;
     }
-    L.circleMarker([detection.lat, detection.lon], detectionMarkerStyle(false))
+    const marker = L.circleMarker([detection.lat, detection.lon], detectionMarkerStyle(false))
       .bindPopup(detectionPopupHtml(result), {
         offset: L.point(0, -10),
         autoPanPadding: L.point(18, 18),
         maxWidth: 320,
       })
       .addTo(satelliteLayer);
+    marker.on("click", () => selectEvidence("satellite", result));
+    evidenceMarkers.set(evidenceMarkerKey("satellite", detectionId(result)), marker);
   }
 
   for (const result of visibleAnomalyResults()) {
@@ -412,7 +659,7 @@ function renderDetectionLayers() {
     if (!Number.isFinite(detection.lat) || !Number.isFinite(detection.lon)) {
       continue;
     }
-    L.circleMarker([detection.lat, detection.lon], detectionMarkerStyle(true))
+    const marker = L.circleMarker([detection.lat, detection.lon], detectionMarkerStyle(true))
       .bindPopup(detectionPopupHtml(result), {
         offset: L.point(0, -10),
         autoPanPadding: L.point(18, 18),
@@ -420,6 +667,8 @@ function renderDetectionLayers() {
       })
       .addTo(anomalyLayer)
       .bringToFront();
+    marker.on("click", () => selectEvidence("anomaly", result));
+    evidenceMarkers.set(evidenceMarkerKey("anomaly", detectionId(result)), marker);
   }
 }
 
@@ -454,8 +703,7 @@ function render() {
       maxWidth: 320,
     });
     marker.on("popupopen", () => {
-      selectedMarkerKey = key;
-      updateMarkerFocus();
+      selectEvidence("ais", vessel);
     });
     marker.on("popupclose", () => {
       if (selectedMarkerKey === key) {
@@ -473,6 +721,7 @@ function render() {
       <div class="vessel-subtitle">${value(vessel.cargo_type)} · ${value(vessel.nav_status)}</div>
     `;
     button.addEventListener("click", () => {
+      selectEvidence("ais", vessel);
       map.setView([vessel.lat, vessel.lon], Math.max(map.getZoom(), 8));
       marker.openPopup();
     });
@@ -486,6 +735,7 @@ function render() {
   updateMarkerFocus();
   renderDetectionLayers();
   updateViewModeControls();
+  renderEvidencePanel();
 
   els.summary.textContent = countSummary({
     ais: vessels.length,
@@ -517,6 +767,7 @@ async function loadVessels() {
     const detectionData = await detectionResponse.json();
     allVessels = vessels;
     detectionResults = detectionData.results || [];
+    resolveSelectedEvidence();
     setOptions(els.cargo, allVessels, "cargo_type", "All cargo types");
     setOptions(els.status, allVessels, "nav_status", "All navigation statuses");
     els.provider.textContent = "Demo mode (mock data)";
@@ -548,6 +799,17 @@ els.drawBox.addEventListener("click", () => {
 });
 els.applyBox.addEventListener("click", applyBoxFilter);
 els.clearBox.addEventListener("click", clearBox);
+els.evidencePanel.addEventListener("click", (event) => {
+  if (event.target.id === "showSelectedEvidence") {
+    showSelectedEvidenceOnMap();
+  }
+});
+els.leftSidebarToggle.addEventListener("click", () => {
+  setSidebarCollapsed("left", !els.shell.classList.contains("left-sidebar-collapsed"));
+});
+els.rightSidebarToggle.addEventListener("click", () => {
+  setSidebarCollapsed("right", !els.shell.classList.contains("right-sidebar-collapsed"));
+});
 for (const button of els.viewModeButtons) {
   button.addEventListener("click", () => {
     viewMode = button.dataset.viewMode;
@@ -566,6 +828,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 updateBoxControls();
+renderEvidencePanel();
 loadVessels();
 setInterval(loadVessels, 10000);
 
