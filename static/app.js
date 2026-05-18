@@ -40,6 +40,10 @@ let isDrawingBox = false;
 const config = window.MARITIME_TRACKER_CONFIG || {};
 const apiVesselsUrl = config.apiVesselsUrl || "/api/vessels";
 const apiDetectionResultsUrl = config.apiDetectionResultsUrl || "/api/detection-results";
+const genericPocNote =
+  "POC note: AIS source depends on current app mode; satellite detections and anomaly candidates are mock demo data. Matching is rule-based and mock-data-first.";
+const aisstreamPocNote =
+  "POC note: AIS layer is live AISStream; satellite detections and anomaly candidates are mock demo data. Matching is rule-based and mock-data-first.";
 
 const els = {
   shell: document.querySelector(".shell"),
@@ -50,6 +54,7 @@ const els = {
   list: document.querySelector("#vesselList"),
   summary: document.querySelector("#summary"),
   provider: document.querySelector("#provider"),
+  pocNote: document.querySelector("#pocNote"),
   lastRefresh: document.querySelector("#lastRefresh"),
   warning: document.querySelector("#warning"),
   coordsToggle: document.querySelector("#coordsToggle"),
@@ -89,6 +94,11 @@ function value(v) {
 
 function formatNumber(v, digits = 1) {
   return Number.isFinite(v) ? v.toFixed(digits) : value(v);
+}
+
+function safeCount(value) {
+  const count = Number(value);
+  return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
 }
 
 function label(vessel) {
@@ -242,12 +252,20 @@ function visibleAnomalyResults() {
   return modeShows("anomalies") ? filterResultsByBox(anomalyResults()) : [];
 }
 
+function countLine(label, visible, total) {
+  return `${label}: ${safeCount(visible)} / ${safeCount(total)} shown`;
+}
+
 function countSummary(visibleCounts) {
   return [
-    `AIS: ${visibleCounts.ais} / ${allVessels.length} shown`,
-    `Satellite: ${visibleCounts.satellite} / ${satelliteResults().length} shown`,
-    `Anomalies: ${visibleCounts.anomalies} / ${anomalyResults().length} shown`,
+    countLine("AIS", visibleCounts.ais, allVessels.length),
+    countLine("Satellite", visibleCounts.satellite, satelliteResults().length),
+    countLine("Anomalies", visibleCounts.anomalies, anomalyResults().length),
   ].join(" · ");
+}
+
+function pocNoteText(provider) {
+  return provider === "aisstream" ? aisstreamPocNote : genericPocNote;
 }
 
 function formatLatLng(latlng) {
@@ -766,12 +784,15 @@ async function loadVessels() {
     const data = await response.json();
     const detectionResponse = await fetch(apiDetectionResultsUrl);
     const detectionData = await detectionResponse.json();
-    allVessels = data.vessels;
-    detectionResults = detectionData.results || [];
+    allVessels = Array.isArray(data.vessels) ? data.vessels : [];
+    detectionResults = Array.isArray(detectionData.results) ? detectionData.results : [];
     resolveSelectedEvidence();
     setOptions(els.cargo, allVessels, "cargo_type", "All cargo types");
     setOptions(els.status, allVessels, "nav_status", "All navigation statuses");
     els.provider.textContent = data.provider_label || `Provider: ${data.provider}`;
+    if (els.pocNote) {
+      els.pocNote.textContent = pocNoteText(data.provider);
+    }
     els.lastRefresh.textContent = `Last refresh: ${new Date(data.last_refresh).toLocaleString()}`;
     els.warning.hidden = !data.warning;
     els.warning.textContent = data.warning || "";

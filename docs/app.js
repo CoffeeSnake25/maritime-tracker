@@ -39,6 +39,8 @@ let drawStartLatLng = null;
 let isDrawingBox = false;
 const mockVesselsUrl = "./mock_vessels.json";
 const mockDetectionResultsUrl = "./mock_detection_results.json";
+const genericPocNote =
+  "POC note: AIS source depends on current app mode; satellite detections and anomaly candidates are mock demo data. Matching is rule-based and mock-data-first.";
 
 const els = {
   shell: document.querySelector(".shell"),
@@ -49,6 +51,7 @@ const els = {
   list: document.querySelector("#vesselList"),
   summary: document.querySelector("#summary"),
   provider: document.querySelector("#provider"),
+  pocNote: document.querySelector("#pocNote"),
   lastRefresh: document.querySelector("#lastRefresh"),
   warning: document.querySelector("#warning"),
   coordsToggle: document.querySelector("#coordsToggle"),
@@ -88,6 +91,11 @@ function value(v) {
 
 function formatNumber(v, digits = 1) {
   return Number.isFinite(v) ? v.toFixed(digits) : value(v);
+}
+
+function safeCount(value) {
+  const count = Number(value);
+  return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
 }
 
 function label(vessel) {
@@ -241,11 +249,15 @@ function visibleAnomalyResults() {
   return modeShows("anomalies") ? filterResultsByBox(anomalyResults()) : [];
 }
 
+function countLine(label, visible, total) {
+  return `${label}: ${safeCount(visible)} / ${safeCount(total)} shown`;
+}
+
 function countSummary(visibleCounts) {
   return [
-    `AIS: ${visibleCounts.ais} / ${allVessels.length} shown`,
-    `Satellite: ${visibleCounts.satellite} / ${satelliteResults().length} shown`,
-    `Anomalies: ${visibleCounts.anomalies} / ${anomalyResults().length} shown`,
+    countLine("AIS", visibleCounts.ais, allVessels.length),
+    countLine("Satellite", visibleCounts.satellite, satelliteResults().length),
+    countLine("Anomalies", visibleCounts.anomalies, anomalyResults().length),
   ].join(" · ");
 }
 
@@ -765,12 +777,15 @@ async function loadVessels() {
     const vessels = await response.json();
     const detectionResponse = await fetch(mockDetectionResultsUrl);
     const detectionData = await detectionResponse.json();
-    allVessels = vessels;
-    detectionResults = detectionData.results || [];
+    allVessels = Array.isArray(vessels) ? vessels : [];
+    detectionResults = Array.isArray(detectionData.results) ? detectionData.results : [];
     resolveSelectedEvidence();
     setOptions(els.cargo, allVessels, "cargo_type", "All cargo types");
     setOptions(els.status, allVessels, "nav_status", "All navigation statuses");
     els.provider.textContent = "Demo mode (mock data)";
+    if (els.pocNote) {
+      els.pocNote.textContent = genericPocNote;
+    }
     els.lastRefresh.textContent = `Last refresh: ${new Date().toLocaleString()}`;
     els.warning.hidden = true;
     els.warning.textContent = "";

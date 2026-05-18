@@ -247,7 +247,8 @@ p {
 }
 
 #summary,
-.meta {
+.meta,
+.poc-note {
   color: var(--muted);
   font-size: 0.9rem;
 }
@@ -362,6 +363,10 @@ button {
 .meta {
   display: grid;
   gap: 4px;
+}
+
+.poc-note {
+  line-height: 1.4;
 }
 
 .warning {

@@ -22,7 +22,7 @@ app = Flask(__name__)
 #     "max_lon": 65.0,
 # }
 
-# East Asia box for testing
+# # East Asia box for testing
 # REGION_BBOX = {
 #     "min_lat": 0.0,
 #     "max_lat": 45.0,
@@ -38,6 +38,13 @@ REGION_BBOX = {
     "max_lon": 37.0,
 }
 
+# # Astoria box for testing
+# REGION_BBOX = {
+#     "min_lat": 42.0,
+#     "max_lat": 50.0,
+#     "min_lon": -129.0,
+#     "max_lon": -122.0,
+# }
 
 FIELDS = [
     "mmsi",
