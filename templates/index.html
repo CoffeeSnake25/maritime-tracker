@@ -15,6 +15,7 @@
   <body>
     <main class="shell">
       <aside class="panel">
+        <button id="leftSidebarToggle" type="button" class="sidebar-toggle sidebar-toggle-left" aria-label="Collapse controls panel" aria-expanded="true">‹</button>
         <header>
           <h1>Dark Vessel Anomaly POC</h1>
           <p id="summary">Loading vessels...</p>
@@ -48,6 +49,7 @@
           <span id="provider"></span>
           <span id="lastRefresh"></span>
         </div>
+        <p id="pocNote" class="poc-note">POC note: AIS source depends on current app mode; satellite detections and anomaly candidates are mock demo data. Matching is rule-based and mock-data-first.</p>
         <p id="warning" class="warning" hidden></p>
 
         <ol id="vesselList" class="vessel-list"></ol>
@@ -72,6 +74,12 @@
           <span id="drawHint" class="map-tool-hint" hidden>Drag on map to draw area</span>
         </div>
       </section>
+
+      <aside class="evidence-panel" aria-label="Evidence details">
+        <button id="rightSidebarToggle" type="button" class="sidebar-toggle sidebar-toggle-right" aria-label="Collapse evidence panel" aria-expanded="true">›</button>
+        <h2>Evidence Details</h2>
+        <div id="evidencePanelContent" class="evidence-panel-content"></div>
+      </aside>
     </main>
 
     <script
